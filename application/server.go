@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
 func (a *App) StartServer(ctx context.Context) error {
 	if err := a.rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("Could not connect to Redis: %v", err)
+	}
+
+	if err := os.Setenv("JWT_SECRET_KEY", "some-random-value"); err != nil {
+		panic(err)
 	}
 
 	server := &http.Server{

@@ -15,6 +15,9 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 
 	if payload != nil {
 		response, _ := json.Marshal(payload)
-		w.Write(response)
+		_, err := w.Write(response)
+		if err != nil {
+			return
+		}
 	}
 }
