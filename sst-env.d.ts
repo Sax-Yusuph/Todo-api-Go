@@ -18,6 +18,10 @@ declare module "sst" {
       "type": "sst.aws.Function"
       "url": string
     }
+    "TodoRouter": {
+      "type": "sst.aws.Router"
+      "url": string
+    }
   }
 }
 /// <reference path="sst-env.d.ts" />
