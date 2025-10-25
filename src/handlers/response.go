@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -13,11 +14,11 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 
-	if payload != nil {
-		response, _ := json.Marshal(payload)
-		_, err := w.Write(response)
-		if err != nil {
-			return
-		}
+	err := json.NewEncoder(w).Encode(payload)
+
+	if err != nil {
+		fmt.Println("Error encoding response %w", err)
+		return
 	}
+
 }

@@ -6,24 +6,32 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdaurl"
 	"github.com/sax-yusuph/todo/application"
 )
 
 func main() {
-	app := application.New()
+	config, err := application.LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	handler := lambdaurl.Wrap(app.Router)
-	lambda.Start(handler)
+	app := application.New(config)
+
+	lambdaurl.Start(app.Router)
 
 }
 
 // Handler local server
-func Handler() {
+func LocalServerHandler() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	app := application.New()
+	config, err := application.LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	app := application.New(config)
 	log.Fatal(app.StartServer(ctx))
 }

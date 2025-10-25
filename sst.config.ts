@@ -18,10 +18,14 @@ export default $config({
     };
   },
   async run() {
-    new sst.aws.Function("GoFunction", {
+    const jwt = new sst.Secret("JWTSecret");
+    const redis = new sst.Secret("RedisUrl");
+    new sst.aws.Function("TodoFunction", {
       url: true,
       runtime: "go",
       handler: "./src",
+      link: [jwt, redis],
+      streaming: true,
     });
   },
 });

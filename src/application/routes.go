@@ -12,7 +12,8 @@ func (a *App) loadRoutes() {
 	router.Use(middleware.Logger)
 
 	auth := handlers.Auth{
-		Repo: a.rdb,
+		Repo:      a.rdb,
+		JWTSecret: a.Config.JWTSecret,
 	}
 
 	todo := handlers.Todo{
@@ -21,6 +22,7 @@ func (a *App) loadRoutes() {
 
 	router.Post("/register", auth.Register)
 	router.Post("/login", auth.Login)
+	router.Post("/logout", auth.Logout)
 
 	router.With(auth.Middleware).Post("/users/{userID}/todos", todo.Create)
 	router.With(auth.Middleware).Get("/users/{userID}/todos", todo.List)

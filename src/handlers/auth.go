@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -17,10 +16,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret = []byte(os.Getenv("JWT_SECRET_KEY"))
-
 type Auth struct {
-	Repo *redis.Client
+	Repo      *redis.Client
+	JWTSecret string
 }
 
 // Claims is a custom struct for JWT claims
@@ -53,7 +51,7 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, _ := hashPassword(u.Password)
+	hashedPassword, _ := a.hashPassword(u.Password)
 
 	// Store user in 'users' hash
 	if err := a.Repo.HSet(r.Context(), "users", u.Username, hashedPassword).Err(); err != nil {
@@ -83,18 +81,56 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check password
-	if !checkPasswordHash(u.Password, hashedPassword) {
+	if !a.checkPasswordHash(u.Password, hashedPassword) {
 		respondWithError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
 
-	tokenString, err := generateJWT(u.Username)
+	tokenString, err := a.generateJWT(u.Username)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to generate token")
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to generate token, %v", err))
 		return
 	}
 
 	respondWithJSON(w, http.StatusOK, map[string]string{"token": tokenString})
+}
+
+// Logout handles POST /logout - blacklists the token
+func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+	// Get token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		respondWithError(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
+		return
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+	// Parse token to get expiration time
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		return []byte(a.JWTSecret), nil
+	})
+
+	if err != nil || !token.Valid {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token")
+		return
+	}
+
+	// Calculate time until token expires
+	expirationTime := claims.ExpiresAt.Time
+	ttl := time.Until(expirationTime)
+
+	// Only blacklist if token hasn't expired yet
+	if ttl > 0 {
+		// Store token in Redis blacklist with TTL matching token expiration
+		blacklistKey := fmt.Sprintf("blacklist:%s", tokenString)
+		if err := a.Repo.Set(r.Context(), blacklistKey, "revoked", ttl).Err(); err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to logout")
+			return
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
 // Middleware AuthMiddleware protects routes
@@ -108,14 +144,27 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 		}
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// 2. Validate Token & Extract User ID
+		// 2. Check if token is blacklisted
+		blacklistKey := fmt.Sprintf("blacklist:%s", tokenString)
+		exists, err := a.Repo.Exists(r.Context(), blacklistKey).Result()
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Database error")
+			return
+		}
+		if exists > 0 {
+			respondWithError(w, http.StatusUnauthorized, "Token has been revoked")
+			return
+		}
+
+		// 3. Validate Token & Extract User ID
 		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 			// Ensure token is signed with HS256 algorithm
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Method)
 			}
-			return jwtSecret, nil
+
+			return []byte(a.JWTSecret), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -123,14 +172,14 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 				respondWithError(w, http.StatusUnauthorized, "Token expired")
 				return
 			}
-			respondWithError(w, http.StatusUnauthorized, "Invalid token")
+			respondWithError(w, http.StatusUnauthorized, fmt.Sprintf("Invalid token %v", err))
 			return
 		}
 
 		// This is the authenticated user's ID, extracted from the valid token
 		tokenUserID := claims.Username
 
-		// 3. Authorize Request (Scope Check)
+		// 4. Authorize Request (Scope Check)
 		// Get the user ID from the URL path parameter
 		urlUserID := chi.URLParam(r, "userID")
 
@@ -149,18 +198,18 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 }
 
 // Helper to hash a password
-func hashPassword(password string) (string, error) {
+func (a Auth) hashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err
 }
 
 // Helper to check a password
-func checkPasswordHash(password, hash string) bool {
+func (a Auth) checkPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-func generateJWT(username string) (string, error) {
+func (a Auth) generateJWT(username string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Username: username,
@@ -171,6 +220,6 @@ func generateJWT(username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString([]byte(a.JWTSecret))
 	return tokenString, err
 }

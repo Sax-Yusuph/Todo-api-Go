@@ -12,11 +12,13 @@ import (
 type App struct {
 	Router http.Handler
 	rdb    *redis.Client
+	Config Config
 }
 
-func New() *App {
+func New(config Config) *App {
 	app := &App{
-		rdb: redis.NewClient(&redis.Options{}),
+		rdb:    redis.NewClient(config.RedisOptions),
+		Config: config,
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)

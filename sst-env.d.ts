@@ -5,6 +5,19 @@
 
 declare module "sst" {
   export interface Resource {
+    "JWTSecret": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "RedisUrl": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "TodoFunction": {
+      "name": string
+      "type": "sst.aws.Function"
+      "url": string
+    }
   }
 }
 /// <reference path="sst-env.d.ts" />
