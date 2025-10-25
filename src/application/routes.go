@@ -28,5 +28,5 @@ func (a *App) loadRoutes() {
 	router.With(auth.Middleware).Put("/users/{userID}/todos/{todoID}", todo.UpdateById)
 	router.With(auth.Middleware).Delete("/users/{userID}/todos/{todoID}", todo.DeleteById)
 
-	a.router = router
+	a.Router = router
 }

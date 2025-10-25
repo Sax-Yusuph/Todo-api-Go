@@ -1,0 +1,15 @@
+{
+  "name": "todo",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "scripts": {
+    "sso": "aws sso login --sso-session=basecliff",
+    "dev": "sst dev",
+    "deploy": "sst deploy"
+  }
+}

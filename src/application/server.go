@@ -20,7 +20,7 @@ func (a *App) StartServer(ctx context.Context) error {
 
 	server := &http.Server{
 		Addr:    ":3000",
-		Handler: a.router,
+		Handler: a.Router,
 	}
 
 	ch := make(chan error, 1)
