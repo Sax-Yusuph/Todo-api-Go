@@ -40,6 +40,7 @@ export default $config({
 
     new sst.aws.Function("TodoFunction", {
       url: {
+        cors: true,
         router: {
           instance: router,
           domain,

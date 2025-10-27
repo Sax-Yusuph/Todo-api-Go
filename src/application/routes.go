@@ -3,6 +3,7 @@ package application
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/sax-yusuph/todo/handlers"
 )
 
@@ -10,6 +11,9 @@ func (a *App) loadRoutes() {
 
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
+
+	c := cors.AllowAll()
+	router.Use(c.Handler)
 
 	auth := handlers.Auth{
 		Repo:      a.rdb,
